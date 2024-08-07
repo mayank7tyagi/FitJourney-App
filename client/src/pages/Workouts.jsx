@@ -80,13 +80,17 @@ const Workouts = () => {
 
   const getTodaysWorkout = async () => {
     setLoading(true);
-    const token = localStorage.getItem("fittrack-app-token");
-    await getWorkouts(token, date ? `?date=${date}` : "").then((res) => {
-      setTodaysWorkouts(res?.data?.todaysWorkouts);
-      console.log(res.data);
+    const token = localStorage.getItem("fitjourney-app-token");
+    try{
+      const response = await getWorkouts(token, date ? `?date=${date}` : "");
+      setTodaysWorkouts(response?.data?.todaysWorkouts);
+      console.log(response.data);
       setLoading(false);
-    });
-  };
+      }
+      catch(error){
+        console.log(error);
+      }
+    };
 
   useEffect(() => {
     getTodaysWorkout();

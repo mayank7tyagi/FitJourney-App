@@ -6,6 +6,9 @@ import UserRoutes from "./routes/User.js";
 
 dotenv.config();
 
+// console.log('MongoDB URL:', process.env.MONGODB_URL); // Add this line to check the environment variable
+// console.log('JWT Secret:', process.env.JWT); // Add this line to check the environment variable
+
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: "50mb" }));
@@ -29,10 +32,24 @@ app.get("/", async (req, res) => {
   });
 });
 
+// const connectDB = () => {
+//   mongoose.set("strictQuery", true);
+//   mongoose
+//     .connect(process.env.MONGODB_URL)
+//     .then(() => console.log("Connected to Mongo DB"))
+//     .catch((err) => {
+//       console.error("Failed to connect with mongo");
+//       console.error(err);
+//     });
+// };
+
 const connectDB = () => {
   mongoose.set("strictQuery", true);
   mongoose
-    .connect(process.env.MONGODB_URL)
+    .connect(process.env.MONGODB_URL, {
+      serverSelectionTimeoutMS: 30000, // Increase server selection timeout to 30 seconds
+      socketTimeoutMS: 45000, // Increase socket timeout to 45 seconds
+    })
     .then(() => console.log("Connected to Mongo DB"))
     .catch((err) => {
       console.error("Failed to connect with mongo");

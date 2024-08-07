@@ -11,63 +11,94 @@ export const UserRegister = async (req, res, next) => {
   try {
     const { email, password, name, img } = req.body;
 
-    // Check if the email is in use
+    // Validate the input
+    if (!email || !password || !name) {
+      return next(createError(400, "Missing required fields: email, password, and name are required"));
+    }
+
+    // Check if the email is already in use
     const existingUser = await User.findOne({ email }).exec();
     if (existingUser) {
       return next(createError(409, "Email is already in use."));
     }
 
-    const salt = bcrypt.genSaltSync(10);
-    const hashedPassword = bcrypt.hashSync(password, salt);
+    // Generate salt and hash password
+    const salt = bcrypt.genSaltSync(10); // Generate salt with a default rounds of 10
+    if (!salt) {
+      return next(createError(500, "Failed to generate salt"));
+    }
 
+    // Check if password is not undefined
+    if (!password) {
+      return next(createError(400, "Password is required"));
+    }
+    
+    const hashedPassword = bcrypt.hashSync(password, salt); // Hash password with salt
+
+    // Create a new user
     const user = new User({
       name,
       email,
       password: hashedPassword,
       img,
     });
-    const createdUser = await user.save();
+    
+    const createdUser = await user.save(); // Save user to the database
+
+    // Generate a JWT token
     const token = jwt.sign({ id: createdUser._id }, process.env.JWT, {
       expiresIn: "9999 years",
     });
+
     return res.status(200).json({ token, user });
   } catch (error) {
-    return next(error);
+    console.error("Error during user registration:", error); // Log detailed error
+    return next(createError(500, "Internal Server Error")); // Return a generic error message
   }
 };
+
 
 export const UserLogin = async (req, res, next) => {
   try {
     const { email, password } = req.body;
 
-    const user = await User.findOne({ email: email });
-    // Check if user exists
+    // Validate the input
+    if (!email || !password) {
+      return next(createError(400, "Email and password are required"));
+    }
+
+    // Find the user by email
+    const user = await User.findOne({ email }).exec();
     if (!user) {
       return next(createError(404, "User not found"));
     }
-    console.log(user);
-    // Check if password is correct
-    const isPasswordCorrect = await bcrypt.compareSync(password, user.password);
+
+    // Check if the password is correct
+    const isPasswordCorrect = bcrypt.compareSync(password, user.password);
     if (!isPasswordCorrect) {
       return next(createError(403, "Incorrect password"));
     }
 
+    // Generate a JWT token
     const token = jwt.sign({ id: user._id }, process.env.JWT, {
       expiresIn: "9999 years",
     });
 
     return res.status(200).json({ token, user });
   } catch (error) {
-    return next(error);
+    console.error("Error during user login:", error); // Log detailed error
+    return next(createError(500, "Internal Server Error")); // Return a generic error message
   }
 };
 
+
 export const getUserDashboard = async (req, res, next) => {
   try {
-    const userId = req.user?.id;
-    const user = await User.findById(userId);
+    const userId = req.user?.id; // Extract user ID from request
+    const user = await User.findById(userId); // Find user by ID
+
     if (!user) {
-      return next(createError(404, "User not found"));
+      return next(createError(404, "User not found")); // If user not found, return 404
     }
 
     const currentDateFormatted = new Date();
@@ -82,7 +113,7 @@ export const getUserDashboard = async (req, res, next) => {
       currentDateFormatted.getDate() + 1
     );
 
-    //calculte total calories burnt
+    // Calculate total calories burnt for today
     const totalCaloriesBurnt = await Workout.aggregate([
       { $match: { user: user._id, date: { $gte: startToday, $lt: endToday } } },
       {
@@ -93,19 +124,19 @@ export const getUserDashboard = async (req, res, next) => {
       },
     ]);
 
-    //Calculate total no of workouts
+    // Calculate total number of workouts for today
     const totalWorkouts = await Workout.countDocuments({
       user: userId,
       date: { $gte: startToday, $lt: endToday },
     });
 
-    //Calculate average calories burnt per workout
+    // Calculate average calories burnt per workout for today
     const avgCaloriesBurntPerWorkout =
-      totalCaloriesBurnt.length > 0
+      totalWorkouts > 0
         ? totalCaloriesBurnt[0].totalCaloriesBurnt / totalWorkouts
         : 0;
 
-    // Fetch category of workouts
+    // Fetch category-wise calories burnt for today
     const categoryCalories = await Workout.aggregate([
       { $match: { user: user._id, date: { $gte: startToday, $lt: endToday } } },
       {
@@ -116,14 +147,14 @@ export const getUserDashboard = async (req, res, next) => {
       },
     ]);
 
-    //Format category data for pie chart
-
+    // Format category data for pie chart
     const pieChartData = categoryCalories.map((category, index) => ({
       id: index,
       value: category.totalCaloriesBurnt,
       label: category._id,
     }));
 
+    // Calculate weekly calories burnt
     const weeks = [];
     const caloriesBurnt = [];
     for (let i = 6; i >= 0; i--) {
@@ -180,18 +211,24 @@ export const getUserDashboard = async (req, res, next) => {
       pieChartData: pieChartData,
     });
   } catch (err) {
-    next(err);
+    next(err); // Pass errors to the error handling middleware
   }
 };
 
+/**
+ * Get workouts by date.
+ * This function fetches workouts for a given date and calculates total calories burnt.
+ */
 export const getWorkoutsByDate = async (req, res, next) => {
   try {
-    const userId = req.user?.id;
-    const user = await User.findById(userId);
-    let date = req.query.date ? new Date(req.query.date) : new Date();
+    const userId = req.user?.id; // Extract user ID from request
+    const user = await User.findById(userId); // Find user by ID
+    let date = req.query.date ? new Date(req.query.date) : new Date(); // Parse date from query, default to today
+
     if (!user) {
-      return next(createError(404, "User not found"));
+      return next(createError(404, "User not found")); // If user not found, return 404
     }
+
     const startOfDay = new Date(
       date.getFullYear(),
       date.getMonth(),
@@ -203,10 +240,13 @@ export const getWorkoutsByDate = async (req, res, next) => {
       date.getDate() + 1
     );
 
+    // Find workouts for the specified date
     const todaysWorkouts = await Workout.find({
       userId: userId,
       date: { $gte: startOfDay, $lt: endOfDay },
     });
+
+    // Calculate total calories burnt for the day
     const totalCaloriesBurnt = todaysWorkouts.reduce(
       (total, workout) => total + workout.caloriesBurned,
       0
@@ -214,23 +254,31 @@ export const getWorkoutsByDate = async (req, res, next) => {
 
     return res.status(200).json({ todaysWorkouts, totalCaloriesBurnt });
   } catch (err) {
-    next(err);
+    next(err); // Pass errors to the error handling middleware
   }
 };
 
+
+// /**
+//  * Add workout.
+//  * This function adds workouts based on a given workout string.
+//  * It parses the workout string, calculates calories burnt, and saves the workouts to the database.
+//  */
 export const addWorkout = async (req, res, next) => {
   try {
-    const userId = req.user?.id;
-    const { workoutString } = req.body;
+    const userId = req.user?.id; // Extract user ID from request
+    const { workoutString } = req.body; // Extract workout string from request body
+
     if (!workoutString) {
-      return next(createError(400, "Workout string is missing"));
+      return next(createError(400, "Workout string is missing")); // If workout string is missing, return 400
     }
-    // Split workoutString into lines
+
+    // Split workout string into lines
     const eachworkout = workoutString.split(";").map((line) => line.trim());
-    // Check if any workouts start with "#" to indicate categories
     const categories = eachworkout.filter((line) => line.startsWith("#"));
+
     if (categories.length === 0) {
-      return next(createError(400, "No categories found in workout string"));
+      return next(createError(400, "No categories found in workout string")); // If no categories found, return 400
     }
 
     const parsedWorkouts = [];
@@ -238,11 +286,10 @@ export const addWorkout = async (req, res, next) => {
     let count = 0;
 
     // Loop through each line to parse workout details
-    await eachworkout.forEach((line) => {
+    eachworkout.forEach((line) => {
       count++;
       if (line.startsWith("#")) {
-        const parts = line?.split("\n").map((part) => part.trim());
-        console.log(parts);
+        const parts = line.split("\n").map((part) => part.trim());
         if (parts.length < 5) {
           return next(
             createError(400, `Workout string is missing for ${count}th workout`)
@@ -251,6 +298,7 @@ export const addWorkout = async (req, res, next) => {
 
         // Update current category
         currentCategory = parts[0].substring(1).trim();
+
         // Extract workout details
         const workoutDetails = parseWorkoutLine(parts);
         if (workoutDetails == null) {
@@ -269,25 +317,37 @@ export const addWorkout = async (req, res, next) => {
       }
     });
 
-    // Calculate calories burnt for each workout
-    await parsedWorkouts.forEach(async (workout) => {
+    // Calculate calories burnt for each workout and save to database
+    for (const workout of parsedWorkouts) {
       workout.caloriesBurned = parseFloat(calculateCaloriesBurnt(workout));
-      await Workout.create({ ...workout, user: userId });
-    });
+      try {
+        await Workout.create({ ...workout, user: userId });
+      } catch (err) {
+        if (err instanceof mongoose.Error.ValidationError) {
+          return next(createError(400, err.message));
+        } else if (err.code === 11000) { // Handle duplicate key error
+          return next(createError(400, `Duplicate key error: ${err.message}`));
+        } else {
+          return next(err);
+        }
+      }
+    }
 
     return res.status(201).json({
       message: "Workouts added successfully",
       workouts: parsedWorkouts,
     });
   } catch (err) {
-    next(err);
+    next(err); // Pass errors to the error handling middleware
   }
 };
 
-// Function to parse workout details from a line
+/**
+ * Parse workout details from a line.
+ * This function extracts workout details from a given line.
+ */
 const parseWorkoutLine = (parts) => {
   const details = {};
-  console.log(parts);
   if (parts.length >= 5) {
     details.workoutName = parts[1].substring(1).trim();
     details.sets = parseInt(parts[2].split("sets")[0].substring(1).trim());
@@ -296,13 +356,15 @@ const parseWorkoutLine = (parts) => {
     );
     details.weight = parseFloat(parts[3].split("kg")[0].substring(1).trim());
     details.duration = parseFloat(parts[4].split("min")[0].substring(1).trim());
-    console.log(details);
     return details;
   }
   return null;
 };
 
-// Function to calculate calories burnt for a workout
+/**
+ * Calculate calories burnt for a workout.
+ * This function calculates calories burnt based on workout details.
+ */
 const calculateCaloriesBurnt = (workoutDetails) => {
   const durationInMinutes = parseInt(workoutDetails.duration);
   const weightInKg = parseInt(workoutDetails.weight);

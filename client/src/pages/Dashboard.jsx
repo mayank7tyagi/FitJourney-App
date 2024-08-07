@@ -62,7 +62,6 @@ const CardWrapper = styled.div`
     gap: 12px;
   }
 `;
-
 const Dashboard = () => {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState();
@@ -76,35 +75,58 @@ const Dashboard = () => {
 
   const dashboardData = async () => {
     setLoading(true);
-    const token = localStorage.getItem("fittrack-app-token");
-    await getDashboardDetails(token).then((res) => {
-      setData(res.data);
-      console.log(res.data);
+    const token = localStorage.getItem("fitjourney-app-token");
+    try{
+
+      const response = await getDashboardDetails(token)
+      setData(response.data);
       setLoading(false);
-    });
+      console.log(response?.data);
+    }
+    catch(error){
+      console.log(error);
+    }
+    // .then((res) => {
+    //   setData(res.data);
+    //   console.log(res.data);
+    //   setLoading(false);
+    // });
   };
   const getTodaysWorkout = async () => {
     setLoading(true);
-    const token = localStorage.getItem("fittrack-app-token");
-    await getWorkouts(token, "").then((res) => {
-      setTodaysWorkouts(res?.data?.todaysWorkouts);
-      console.log(res.data);
+    const token = localStorage.getItem("fitjourney-app-token");
+    try{
+
+      const response = await getWorkouts(token, "");
+      setTodaysWorkouts(response?.data?.todaysWorkouts);
+      console.log(response?.data);
       setLoading(false);
-    });
+    }
+    catch(error){
+      console.log(error);
+    }
+    
   };
 
   const addNewWorkout = async () => {
     setButtonLoading(true);
     const token = localStorage.getItem("fitjourney-app-token");
-    await addWorkout(token, { workoutString: workout })
-      .then((res) => {
+    try{
+
+      const response = await addWorkout(token, { workoutString: workout })
+      console.log(response);
+      // .then((res) => {
         dashboardData();
         getTodaysWorkout();
         setButtonLoading(false);
-      })
-      .catch((err) => {
-        alert(err);
-      });
+    }
+    catch(error){
+      console.log(error);
+    }
+    // })
+    // .catch((err) => {
+      // alert(err);
+    // });
   };
 
   useEffect(() => {
